@@ -1,3 +1,4 @@
+#include <idofront/thread/LambdaRunnable.hpp>
 #include <idofront/thread/Pool.hpp>
 
 class DummyRunnable : public idofront::thread::Runnable
@@ -36,6 +37,21 @@ class DummyRunnable : public idofront::thread::Runnable
 int main()
 {
     auto pool = std::make_shared<idofront::thread::Pool>(4);
+
+    pool->Submit(std::make_shared<idofront::thread::LambdaRunnable>(
+        []() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(600));
+            auto msg = "LambdaRunnable is running.\n";
+            std::cout << msg << std::flush;
+        },
+        []() {
+            auto msg = "LambdaRunnable is launching.\n";
+            std::cout << msg << std::flush;
+        },
+        []() {
+            auto msg = "LambdaRunnable is finished.\n";
+            std::cout << msg << std::flush;
+        }));
 
     for (int i = 0; i < 3; i++)
     {
