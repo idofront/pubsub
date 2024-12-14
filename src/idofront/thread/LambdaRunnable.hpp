@@ -9,7 +9,9 @@ namespace idofront
 {
 namespace thread
 {
-/// @brief Runnable interface
+/// @brief LambdaRunnable class
+/// @note This class is a Runnable class that can be created with lambda functions.
+/// In this implementation, you cannot use Sleep() or SleepUntil() functions in the lambda functions.
 class LambdaRunnable : public Runnable
 {
   public:
