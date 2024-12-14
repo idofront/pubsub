@@ -71,6 +71,7 @@ foreach(MAIN_SOURCE ${MAIN_SOURCES})
   endif()
   target_include_directories(${MAIN_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src ${fmt_INCLUDE_DIRS})
   target_link_libraries(${MAIN_NAME} ${subproject_names} fmt::fmt ${Boost_LIBRARIES})
+  target_compile_options(${MAIN_NAME} PRIVATE -Wall -Wextra)
 endforeach()
 
 # テストディレクトリの cpp ファイルを取得
@@ -84,6 +85,7 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
   target_link_libraries(${TEST_NAME} ${subproject_names} fmt::fmt GTest::GTest GTest::Main)
   add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
   set_target_properties(${TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test)
+  target_compile_options(${MAIN_NAME} PRIVATE -Wall -Wextra)
 endforeach()
 
 # CTest の有効化
