@@ -1,5 +1,5 @@
-#ifndef IDOFRONT__PUBSUB__MESSAGE_BUS_HPP
-#define IDOFRONT__PUBSUB__MESSAGE_BUS_HPP
+#ifndef IDOFRONT__PUBSUB__SINGLE_TOPIC_MESSAGE_BUS_HPP
+#define IDOFRONT__PUBSUB__SINGLE_TOPIC_MESSAGE_BUS_HPP
 
 #include <functional>
 #include <idofront/pubsub/MessageBusInterface.hpp>
@@ -15,15 +15,16 @@ namespace idofront
 namespace pubsub
 {
 
-template <typename T> class MessageBus : public MessageBusInterface<T>
+/// @brief Just a simple message bus that can only handle one topic
+template <typename T> class SingleTopicMessageBus : public MessageBusInterface<T>
 {
   public:
     static std::shared_ptr<MessageBusInterface<T>> Create()
     {
-        return std::shared_ptr<MessageBus<T>>(new MessageBus<T>());
+        return std::shared_ptr<SingleTopicMessageBus<T>>(new SingleTopicMessageBus<T>());
     }
 
-    virtual ~MessageBus() override
+    virtual ~SingleTopicMessageBus() override
     {
     }
 
@@ -62,7 +63,7 @@ template <typename T> class MessageBus : public MessageBusInterface<T>
     }
 
   private:
-    MessageBus() = default;
+    SingleTopicMessageBus() = default;
     std::vector<ticket::Counterfoil<std::function<void(T)>>> _Counterfoils;
 };
 
