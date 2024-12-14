@@ -13,7 +13,7 @@ int main()
 
     auto stubs = std::vector<idofront::ticket::Stub>{};
     auto functions = std::vector<std::function<void(int)>>();
-    for (auto i = 0; i < 5; ++i)
+    for (auto i = std::size_t(0); i < 5; ++i)
     {
         functions.push_back(
             [i](int message) { std::cout << "Subscriber " << i << " received message: " << message << std::endl; });
@@ -44,7 +44,7 @@ int main()
     std::cout << std::endl;
 
     std::cout << "step 5: check if subscribers are expired" << std::endl;
-    for (auto i = 0; i < stubs.size(); ++i)
+    for (auto i = std::size_t(0); i < stubs.size(); ++i)
     {
         auto msg = (stubs[i].IsExpired()) ? "expired" : "available";
         std::cout << "Subscriber " << i << " is " << msg << std::endl;

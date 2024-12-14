@@ -28,7 +28,10 @@ template <typename T> class SingleTopicMessageBus : public MessageBusInterface<T
     {
     }
 
-    virtual void Publish(T message) override
+    /// @brief Publish a message.
+    /// @param message Message to publish
+    /// @param topic Topic of the message. Ignored in this implementation.
+    virtual void Publish(T message, const std::string &) override
     {
         std::for_each(_Counterfoils.begin(), _Counterfoils.end(),
                       [message](ticket::Counterfoil<std::function<void(T)>> counterfoil) {
@@ -38,7 +41,11 @@ template <typename T> class SingleTopicMessageBus : public MessageBusInterface<T
                       });
     }
 
-    virtual ticket::Stub Subscribe(std::function<void(T)> subscriber) override
+    /// @brief Subscribe to the message bus.
+    /// @param subscriber Subscriber function
+    /// @param topic Topic of the message. Ignored in this implementation.
+    /// @return Stub to the subscriber
+    virtual ticket::Stub Subscribe(std::function<void(T)> subscriber, const std::string &) override
     {
         auto subscriberPtr = std::make_shared<std::function<void(T)>>(subscriber);
         auto ticket = ticket::Receptor::Recept(subscriberPtr);
@@ -50,7 +57,12 @@ template <typename T> class SingleTopicMessageBus : public MessageBusInterface<T
         _Counterfoils.push_back(counterfoil);
         return stub;
     }
-    virtual bool Unsubscribe(ticket::Stub stub) override
+
+    /// @brief Unsubscribe from the message bus.
+    /// @param stub Stub to unsubscribe
+    /// @param topic Topic of the message. Ignored in this implementation.
+    /// @return True if the subscriber was unsubscribed, false otherwise
+    virtual bool Unsubscribe(ticket::Stub stub, const std::string &) override
     {
         auto it = std::find(_Counterfoils.begin(), _Counterfoils.end(), stub);
         if (it == _Counterfoils.end())
