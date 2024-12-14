@@ -64,12 +64,10 @@ int main()
 
     std::cout << "step 1: prepare scenarios" << std::endl;
 
-    auto scenarioA = std::make_shared<Scenario>("topic A");
-    RegisterSubscriber(scenarioA);
-    auto scenarioB = std::make_shared<Scenario>("topic B");
-    RegisterSubscriber(scenarioB);
+    auto scenario = std::make_shared<Scenario>("");
+    RegisterSubscriber(scenario);
 
-    auto scenarios = std::vector<std::shared_ptr<Scenario>>{scenarioA};
+    auto scenarios = std::vector<std::shared_ptr<Scenario>>{scenario};
 
     auto messageBus = scenarios[0]->MessageBus();
     auto topics = std::vector<std::string>{""};
@@ -90,7 +88,7 @@ int main()
     }
 
     std::cout << "step 3: unregister all subscribers in scenario A" << std::endl;
-    scenarioA->UnregisterAllSubscriber();
+    scenario->UnregisterAllSubscriber();
 
     std::cout << "step 4: publish message to message bus directly" << std::endl;
     for (auto topic : topics)
