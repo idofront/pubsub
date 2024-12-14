@@ -3,115 +3,85 @@
 #include <memory>
 #include <numeric>
 
-void PublishMessages(const std::shared_ptr<idofront::pubsub::MessageBusInterface<int>> &messageBus,
-                     const std::vector<int> &messages, const std::string &topic)
+class Scenario
 {
-    for (auto message : messages)
+  public:
+    Scenario(const std::string &topic) : _Topic(topic)
     {
-        messageBus->Publish(message, topic);
     }
-}
-
-void UnsubscribeStub(const std::shared_ptr<idofront::pubsub::MessageBusInterface<int>> &messageBus,
-                     const std::vector<idofront::ticket::Stub> &stubs, const std::string &topic)
-{
-    for (auto index = std::size_t(0); index < stubs.size(); index++)
+    virtual ~Scenario() = default;
+    const std::string Topic()
     {
-        auto stub = stubs[index];
-        if (messageBus->Unsubscribe(stub, topic))
-        {
-            std::cout << "Subscriber " << index << " unsuscribed from topic: " << topic << std::endl;
-        }
+        return _Topic;
     }
-}
-
-std::vector<idofront::ticket::Stub> FilterUnsubscribingStub(const std::vector<idofront::ticket::Stub> &stubs)
-{
-    auto unsubscribingStubs = std::vector<idofront::ticket::Stub>{};
-    for (auto i = std::size_t(0); i < stubs.size(); i++)
+    const std::shared_ptr<idofront::pubsub::MessageBusInterface<int>> MessageBus()
     {
-        if (i % 2 == 0)
-        {
-            unsubscribingStubs.push_back(stubs[i]);
-        }
+        return _MessageBus;
     }
-    return unsubscribingStubs;
-}
-
-std::vector<idofront::ticket::Stub> FlattenStubs(
-    const std::unordered_map<std::string, std::vector<idofront::ticket::Stub>> &stubs)
-{
-    auto flatStubs = std::vector<idofront::ticket::Stub>{};
-    for (auto const &entry : stubs)
+    virtual void UnregisterAllSubscriber()
     {
-        for (auto const &stub : entry.second)
-        {
-            flatStubs.push_back(stub);
-        }
+        std::for_each(_Stubs.begin(), _Stubs.end(),
+                      [this](idofront::ticket::Stub stub) { MessageBus()->Unsubscribe(stub, Topic()); });
     }
-    return flatStubs;
-}
-
-void ShowStubStatus(const std::vector<idofront::ticket::Stub> &stubs)
-{
-    for (auto i = std::size_t(0); i < stubs.size(); ++i)
+    void RegisterSubscriber(std::function<void(int)> subscriber)
     {
-        auto msg = (stubs[i].IsExpired()) ? "expired" : "available";
-        std::cout << "Subscriber " << i << " is " << msg << std::endl;
+        _Stubs.push_back(MessageBus()->Subscribe(subscriber, Topic()));
     }
-}
 
-/// @brief Example of using the message bus
+  protected:
+    const std::vector<idofront::ticket::Stub> Stubs()
+    {
+        return _Stubs;
+    }
+
+  private:
+    static std::shared_ptr<idofront::pubsub::MessageBusInterface<int>> _MessageBus;
+    const std::string _Topic;
+    std::vector<idofront::ticket::Stub> _Stubs;
+};
+
+std::shared_ptr<idofront::pubsub::MessageBusInterface<int>> Scenario::_MessageBus =
+    idofront::pubsub::MessageBus<int>::Create();
+
 int main()
 {
     std::cout << "Example for MessageBus" << std::endl;
 
-    std::cout << "step 1: prepare topics, messages and message bus" << std::endl;
-    auto topics = std::vector<std::string>{"topic1", "topic2"};
-    auto messages = std::vector<int>{1, 2, 3};
-    auto messageBus = idofront::pubsub::MessageBus<int>::Create();
+    std::cout << "step 1: prepare scenarios" << std::endl;
 
-    std::cout << "step 2: subscribe functions to message bus" << std::endl;
-    auto subscribers = std::vector<std::function<void(int)>>{};
-    for (auto i = std::size_t(0); i < 3 * topics.size(); ++i)
-    {
-        subscribers.push_back(
-            [i](int message) { std::cout << "Subscriber " << i << " received message: " << message << std::endl; });
-    }
+    auto scenarioA = std::make_shared<Scenario>("topic A");
+    scenarioA->RegisterSubscriber(
+        [](int message) { std::cout << "Scenario A received message: " << message << std::endl; });
 
-    auto stubs = std::unordered_map<std::string, std::vector<idofront::ticket::Stub>>{};
-    for (auto j = std::size_t(0); j < topics.size(); ++j)
-    {
-        stubs[topics[j]] = std::vector<idofront::ticket::Stub>{};
-        for (auto i = std::size_t(0); i < 3; ++i)
-        {
-            auto index = j * topics.size() + i;
-            auto func = subscribers[index];
-            stubs[topics[j]].push_back(messageBus->Subscribe(func, topics[j]));
-        }
-    }
+    auto scenarioB = std::make_shared<Scenario>("topic B");
+    scenarioB->RegisterSubscriber(
+        [](int message) { std::cout << "Scenario B received message: " << message << std::endl; });
 
-    std::cout << "step 3: publish messages" << std::endl;
+    auto scenarios = std::vector<std::shared_ptr<Scenario>>{scenarioA, scenarioB};
+
+    auto messageBus = scenarios[0]->MessageBus();
+    auto topics = std::vector<std::string>{""};
+    std::transform(scenarios.begin(), scenarios.end(), std::back_inserter(topics),
+                   [](std::shared_ptr<Scenario> scenario) { return scenario->Topic(); });
+
+    std::cout << "step 2: publish message to message bus directly" << std::endl;
+    auto message = 100;
     for (auto topic : topics)
     {
-        PublishMessages(messageBus, messages, topic);
+        std::cout << "Publish message(" << message << ") to topic: " << (topic.empty() ? "default" : topic)
+                  << std::endl;
+        messageBus->Publish(message++, topic);
     }
 
-    std::cout << "step 4: unsuscribe some subscribers" << std::endl;
-    auto flattenedStubs = FlattenStubs(stubs);
-    auto unsubscribingStubs = FilterUnsubscribingStub(flattenedStubs);
+    std::cout << "step 3: unregister all subscribers in scenario A" << std::endl;
+    scenarioA->UnregisterAllSubscriber();
+
+    std::cout << "step 4: publish message to message bus directly" << std::endl;
     for (auto topic : topics)
     {
-        UnsubscribeStub(messageBus, unsubscribingStubs, topic);
-    }
-
-    std::cout << "step 5: check if subscribers are expired" << std::endl;
-    ShowStubStatus(flattenedStubs);
-
-    std::cout << "step 6: publish messages again" << std::endl;
-    for (auto topic : topics)
-    {
-        PublishMessages(messageBus, messages, topic);
+        std::cout << "Publish message(" << message << ") to topic: " << (topic.empty() ? "default" : topic)
+                  << std::endl;
+        messageBus->Publish(message++, topic);
     }
 
     std::cout << "done" << std::endl;
