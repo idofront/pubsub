@@ -1,15 +1,15 @@
-#include <idofront/pubsub/MessageBus.hpp>
+#include <idofront/pubsub/SingleTopicMessageBus.hpp>
 #include <iostream>
 #include <memory>
 
 /// @brief Example of using the message bus
 int main()
 {
-    std::cout << "MessageBusExample" << std::endl;
+    std::cout << "Example for SingleTopicMessageBus" << std::endl;
 
     std::cout << "step 1: prepare messages and message bus" << std::endl;
     auto messages = std::vector<int>{1, 2, 3};
-    auto messageBus = idofront::pubsub::MessageBus<int>::Create();
+    auto messageBus = idofront::pubsub::SingleTopicMessageBus<int>::Create();
 
     auto stubs = std::vector<idofront::ticket::Stub>{};
     auto functions = std::vector<std::function<void(int)>>();
