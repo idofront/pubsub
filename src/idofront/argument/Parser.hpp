@@ -3,12 +3,14 @@
 
 #include <cctype>
 #include <functional>
+#include <iostream>
 #include <locale>
 #include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace idofront
@@ -55,6 +57,13 @@ template <typename T> class Argument
         return Argument(name);
     }
 
+    static Argument Update(const Argument &argument, const std::optional<T> &value)
+    {
+        auto updatedArgument = argument;
+        updatedArgument._Value = value;
+        return updatedArgument;
+    }
+
     std::string Name() const
     {
         return _Name;
@@ -69,6 +78,11 @@ template <typename T> class Argument
     {
         _Description = description;
         return *this;
+    }
+
+    std::string Description() const
+    {
+        return _Description;
     }
 
     Argument Default(const T &defaultValue)
@@ -144,9 +158,11 @@ template <typename T> class Argument
 };
 
 template <typename T>
-std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
+std::optional<T> Parse(std::vector<std::string> argv, const Argument<T> &argument,
                        std::function<T(const std::string &)> converter)
 {
+    std::size_t argc = argv.size();
+
     auto argumentName = argument.Name();
     auto actualValue = std::string();
 
@@ -167,7 +183,7 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
         }
     };
 
-    for (int i = 0; i < argc; i++)
+    for (auto i = std::size_t(0); i < argc; i++)
     {
         if (argv[i][0] == '-')
         {
@@ -221,10 +237,17 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
     }
 }
 
+template <typename T>
+std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
+                       std::function<T(const std::string &)> converter)
+{
+    return Parse(std::vector<std::string>(argv, argv + argc), argument, converter);
+}
+
 inline Argument<type::Flag> Help =
     Argument<type::Flag>::New('h', "help").Description("Show help message.").Default(type::Flag::False);
 
-template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument)
+template <typename T> std::optional<T> Parse(std::vector<std::string> argv, const Argument<T> &argument)
 {
     static_assert(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
                       std::is_same_v<T, int64_t> || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> ||
@@ -298,8 +321,141 @@ template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argum
 
     auto converter = getConverter(argument);
 
-    return Parse(argc, argv, argument, converter);
+    return Parse(argv, argument, converter);
 }
+
+template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument)
+{
+    return Parse(std::vector<std::string>(argv, argv + argc), argument);
+}
+
+#include <unordered_map>
+class ArgumentInformation
+{
+  public:
+    template <typename T> static ArgumentInformation New(const Argument<T> &argument)
+    {
+        auto isFlag = std::is_same_v<T, type::Flag>;
+        return ArgumentInformation(argument.Name(), argument.ShortName(), argument.Description(), isFlag,
+                                   argument.IsRequired());
+    }
+
+    ArgumentInformation(const std::string &name, const std::string &shortName, const std::string &description,
+                        bool isFlag, bool isRequired)
+        : _Name(name), _ShortName(shortName), _Description(description), _IsFlag(isFlag), _IsRequired(isRequired)
+    {
+    }
+
+    std::string Name() const
+    {
+        return _Name;
+    }
+
+    std::string ShortName() const
+    {
+        return _ShortName;
+    }
+
+    std::string Description() const
+    {
+        return _Description;
+    }
+
+    bool IsFlag() const
+    {
+        return _IsFlag;
+    }
+
+    bool IsRequired() const
+    {
+        return _IsRequired;
+    }
+
+  private:
+    std::string _Name;
+    std::string _ShortName;
+    std::string _Description;
+    bool _IsFlag;
+    bool _IsRequired;
+};
+
+class Parser
+{
+  public:
+    Parser(int argc, char *argv[]) : _ArgumentValues(std::vector<std::string>(argv, argv + argc))
+    {
+    }
+
+    template <typename T> Argument<T> Parse(const Argument<T> &argument)
+    {
+        auto information = ArgumentInformation::New(argument);
+        _ArgumentInformations.push_back(information);
+
+        auto result = ::idofront::argument::Parse(_ArgumentValues, argument);
+        return result.has_value() ? idofront::argument::Argument<T>::Update(argument, result) : argument;
+    }
+
+    void ShowHelp(std::size_t maxWidth = 80)
+    {
+        auto helpLines = std::vector<std::string>{
+            "Usage: " + _ArgumentValues[0] + " [options]",
+            "Options:",
+        };
+
+        std::vector<std::tuple<std::string, std::string>> argumentHelps;
+        std::transform(_ArgumentInformations.begin(), _ArgumentInformations.end(), std::back_inserter(argumentHelps),
+                       [](const ArgumentInformation &information) {
+                           auto upperCaseName = std::string(information.Name());
+                           std::transform(upperCaseName.begin(), upperCaseName.end(), upperCaseName.begin(),
+                                          [](char const &c) { return std::toupper(c); });
+
+                           auto helpString =
+                               "--" + information.Name() +
+                               (information.ShortName().empty() ? "" : " (-" + information.ShortName() + ")");
+                           if (!information.IsFlag())
+                           {
+                               helpString += " <" + upperCaseName + ">";
+                           }
+
+                           return std::make_tuple(helpString, information.Description());
+                       });
+
+        auto keysMaxLength = std::size_t(std::accumulate(argumentHelps.begin(), argumentHelps.end(), 0,
+                                                         [](std::size_t l, std::tuple<std::string, std::string> tuple) {
+                                                             auto helpString = std::get<0>(tuple);
+                                                             return std::max(l, helpString.size());
+                                                         }));
+
+        auto isOneLine = keysMaxLength < (maxWidth / 3);
+
+        std::for_each(argumentHelps.begin(), argumentHelps.end(), [&](std::tuple<std::string, std::string> tuple) {
+            auto helpString = std::get<0>(tuple);
+            auto description = std::get<1>(tuple);
+
+            if (isOneLine)
+            {
+                auto padding = std::string(keysMaxLength - helpString.size(), ' ');
+                auto helpLine = helpString + padding + "  " + description;
+                // TODO: Wrap the description if it is too long.
+                helpLines.push_back(helpLine);
+            }
+            else
+            {
+                helpLines.push_back(helpString);
+                helpLines.push_back("  " + description);
+                // TODO: Wrap the description if it is too long.
+            }
+        });
+
+        std::for_each(helpLines.begin(), helpLines.end(), [](const std::string &line) {
+            std::cout << line << "\n" << std::flush;
+        });
+    }
+
+  private:
+    std::vector<std::string> _ArgumentValues;
+    std::vector<ArgumentInformation> _ArgumentInformations;
+};
 
 } // namespace argument
 } // namespace idofront
