@@ -5,10 +5,16 @@ int main(int argc, char *argv[])
 {
     try
     {
-        auto length = idofront::argument::Parse<int>(
-            argc, argv,
-            idofront::argument::Argument<int>::New('l', "length").Description("The length of the manager.").Default(1));
-        std::cout << "Length: " << length.value() << "\n" << std::flush;
+        auto length = idofront::argument::Parse<uint8_t>(argc, argv,
+                                                         idofront::argument::Argument<uint8_t>::New('l', "length")
+                                                             .Description("The length of the manager.")
+                                                             .Default(1));
+        auto message = idofront::argument::Parse<std::string>(argc, argv,
+                                                              idofront::argument::Argument<std::string>::New("message")
+                                                                  .Description("The message to be published.")
+                                                                  .Default("Hello, world!"));
+        std::cout << "Length: " << (uint64_t)length.value() << "\n" << std::flush;
+        std::cout << "Message: " << message.value() << "\n" << std::flush;
     }
     catch (const std::exception &e)
     {

@@ -53,7 +53,7 @@ template <typename T> class Argument
         return _DefaultValue;
     }
 
-    Argument IsRequired(bool isRequired = false)
+    Argument IsRequired(bool isRequired = true)
     {
         _IsRequired = isRequired;
         return *this;
@@ -66,7 +66,7 @@ template <typename T> class Argument
 
     std::optional<T> Value() const
     {
-        this->_Value.has_value() ? this->_Value : _DefaultValue;
+        return this->_Value.has_value() ? this->_Value : _DefaultValue;
     }
 
   private:
@@ -78,7 +78,7 @@ template <typename T> class Argument
     std::optional<T> _Value;
 
     Argument(const std::string &shortName, const std::string &name)
-        : _Name(name), _ShortName(shortName), _Description(), _IsRequired(true)
+        : _Name(name), _ShortName(shortName), _Description(), _IsRequired(false)
     {
     }
 
@@ -154,32 +154,47 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
 
 template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument)
 {
-    static_assert(std::is_same_v<T, int> || std::is_same_v<T, float> || std::is_same_v<T, double> ||
-                      std::is_same_v<T, std::string>,
+    static_assert(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
+                      std::is_same_v<T, int64_t> || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> ||
+                      std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, float> ||
+                      std::is_same_v<T, double> || std::is_same_v<T, long double> || std::is_same_v<T, std::string>,
                   "Type not supported automatically. Please provide a converter function.");
 
-    auto converter = std::function<T(const std::string &)>(nullptr);
+    auto getConverter = std::function<std::function<T(const std::string &)>(const Argument<T> &)>(
+        [](const Argument<T> &) -> std::function<T(const std::string &)> {
+            if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
+                          std::is_same_v<T, int64_t>)
+            {
+                return [](const std::string &value) { return std::stoll(value); };
+            }
+            else if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> ||
+                               std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>)
+            {
+                return [](const std::string &value) { return std::stoull(value); };
+            }
+            else if constexpr (std::is_same_v<T, float>)
+            {
+                return [](const std::string &value) { return std::stof(value); };
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                return [](const std::string &value) { return std::stod(value); };
+            }
+            else if constexpr (std::is_same_v<T, long double>)
+            {
+                return [](const std::string &value) { return std::stold(value); };
+            }
+            else if constexpr (std::is_same_v<T, std::string>)
+            {
+                return [](const std::string &value) { return value; };
+            }
+            else
+            {
+                throw std::invalid_argument("Type not supported.");
+            }
+        });
 
-    if constexpr (std::is_same_v<T, int>)
-    {
-        converter = [](const std::string &value) { return std::stoi(value); };
-    }
-    else if constexpr (std::is_same_v<T, float>)
-    {
-        converter = [](const std::string &value) { return std::stof(value); };
-    }
-    else if constexpr (std::is_same_v<T, double>)
-    {
-        converter = [](const std::string &value) { return std::stod(value); };
-    }
-    else if constexpr (std::is_same_v<T, std::string>)
-    {
-        converter = [](const std::string &value) { return value; };
-    }
-    else
-    {
-        throw std::invalid_argument("Type not supported.");
-    }
+    auto converter = getConverter(argument);
 
     return Parse(argc, argv, argument, converter);
 }
