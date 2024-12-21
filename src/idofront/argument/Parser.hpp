@@ -154,20 +154,27 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
 
 template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument)
 {
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, float> || std::is_same_v<T, double> ||
+                      std::is_same_v<T, std::string>,
+                  "Type not supported automatically. Please provide a converter function.");
+
     auto converter = std::function<T(const std::string &)>(nullptr);
 
-    const auto &type = typeid(T);
-    if (type == typeid(int))
+    if constexpr (std::is_same_v<T, int>)
     {
         converter = [](const std::string &value) { return std::stoi(value); };
     }
-    else if (type == typeid(float))
+    else if constexpr (std::is_same_v<T, float>)
     {
         converter = [](const std::string &value) { return std::stof(value); };
     }
-    else if (type == typeid(double))
+    else if constexpr (std::is_same_v<T, double>)
     {
         converter = [](const std::string &value) { return std::stod(value); };
+    }
+    else if constexpr (std::is_same_v<T, std::string>)
+    {
+        converter = [](const std::string &value) { return value; };
     }
     else
     {
