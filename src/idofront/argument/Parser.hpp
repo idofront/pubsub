@@ -1,7 +1,9 @@
 #ifndef IDOFRONT__ARGUMENT__PARSER_HPP
 #define IDOFRONT__ARGUMENT__PARSER_HPP
 
+#include <cctype>
 #include <functional>
+#include <locale>
 #include <numeric>
 #include <optional>
 #include <sstream>
@@ -13,6 +15,33 @@ namespace idofront
 {
 namespace argument
 {
+namespace type
+{
+class Flag
+{
+  public:
+    Flag(bool value = false) : _Value(value)
+    {
+    }
+    operator bool() const
+    {
+        return _Value;
+    }
+    static const Flag True;
+    static const Flag False;
+    const std::string ToString() const
+    {
+        return _Value ? "true" : "false";
+    }
+
+  private:
+    bool _Value;
+};
+
+const Flag Flag::True = Flag(true);
+const Flag Flag::False = Flag(false);
+} // namespace type
+
 template <typename T> class Argument
 {
   public:
@@ -69,6 +98,31 @@ template <typename T> class Argument
         return this->_Value.has_value() ? this->_Value : _DefaultValue;
     }
 
+    const std::string ToHelpString() const
+    {
+        auto upperCaseName = std::string(_Name);
+        std::transform(upperCaseName.begin(), upperCaseName.end(), upperCaseName.begin(),
+                       [](char const &c) { return std::toupper(c); });
+
+        auto isFlag = std::is_same_v<T, type::Flag>;
+
+        std::stringstream ss;
+        ss << "  ";
+        if (!_ShortName.empty())
+        {
+            ss << "-" << _ShortName << ", ";
+        }
+        ss << "--" << _Name;
+        if (!isFlag)
+        {
+            ss << " <" << upperCaseName << ">";
+        }
+        ss << "\n";
+        ss << "    " << _Description;
+        ss << " (Default: " << _DefaultValue << ")";
+        return ss.str();
+    }
+
   private:
     std::string _Name;
     std::string _ShortName;
@@ -120,8 +174,23 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
             auto currentArgumentName = std::string(argv[i]);
             if (isArgumentMatched(argument, currentArgumentName))
             {
-                auto nextValueExists = (i + 1) < argc;
-                actualValue = std::string(nextValueExists ? argv[i + 1] : "");
+                if (std::is_same_v<T, type::Flag>)
+                {
+                    actualValue = type::Flag::True.ToString();
+                }
+                else
+                {
+                    auto nextValueExists = (i + 1) < argc;
+                    if (nextValueExists)
+                    {
+                        actualValue = std::string(nextValueExists ? argv[++i] : "");
+                        continue;
+                    }
+                    else
+                    {
+                        throw std::invalid_argument("Argument \"" + argumentName + "\" requires a value.");
+                    }
+                }
             }
         }
     }
@@ -152,12 +221,16 @@ std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument,
     }
 }
 
+inline Argument<type::Flag> Help =
+    Argument<type::Flag>::New('h', "help").Description("Show help message.").Default(type::Flag::False);
+
 template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argument<T> &argument)
 {
     static_assert(std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t> ||
                       std::is_same_v<T, int64_t> || std::is_same_v<T, uint8_t> || std::is_same_v<T, uint16_t> ||
                       std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, float> ||
-                      std::is_same_v<T, double> || std::is_same_v<T, long double> || std::is_same_v<T, std::string>,
+                      std::is_same_v<T, double> || std::is_same_v<T, long double> || std::is_same_v<T, std::string> ||
+                      std::is_same_v<T, bool> || std::is_same_v<T, type::Flag>,
                   "Type not supported automatically. Please provide a converter function.");
 
     auto getConverter = std::function<std::function<T(const std::string &)>(const Argument<T> &)>(
@@ -187,6 +260,35 @@ template <typename T> std::optional<T> Parse(int argc, char *argv[], const Argum
             else if constexpr (std::is_same_v<T, std::string>)
             {
                 return [](const std::string &value) { return value; };
+            }
+            else if constexpr (std::is_same_v<T, bool>)
+            {
+                return [](const std::string &value) {
+                    if (value == "true")
+                    {
+                        return true;
+                    }
+                    else if (value == "false")
+                    {
+                        return false;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            auto integerValue = std::stoll(value);
+                            return static_cast<bool>(integerValue);
+                        }
+                        catch (const std::exception &e)
+                        {
+                            throw std::invalid_argument("Value must be either \"true\"(1) or \"false\"(0).");
+                        }
+                    }
+                };
+            }
+            else if constexpr (std::is_same_v<T, type::Flag>)
+            {
+                return [](const std::string &) { return type::Flag::True; };
             }
             else
             {
